@@ -1,9 +1,11 @@
-import { getAnimeDetail, getAnimeCharacters } from "@/lib/api";
+import { getAnimeDetail, getAnimeCharacters, getAnimeRecommendations } from "@/lib/api";
 
 export default async function AnimeDetail({ params }: { params: any }) {
   const { id } = await params;
+
   const anime = await getAnimeDetail(id);
   const characters = await getAnimeCharacters(id);
+  const recommendations = await getAnimeRecommendations(id);
 
   if (!anime) {
     return (
@@ -18,13 +20,16 @@ export default async function AnimeDetail({ params }: { params: any }) {
       <h1 className="text-4xl font-bold mb-8">{anime.title}</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-10">
+        {/* Anime Poster */}
         <img
           src={anime.images.jpg.large_image_url}
           alt={anime.title}
           className="w-full rounded-lg shadow-lg"
         />
 
+        {/* Right Content Panel */}
         <div className="space-y-10">
+
           {/* SYNOPSIS */}
           <section>
             <h2 className="text-2xl font-semibold mb-3">Synopsis</h2>
@@ -88,6 +93,7 @@ export default async function AnimeDetail({ params }: { params: any }) {
                   key={item.character.mal_id}
                   className="flex items-center gap-4 p-4 bg-gray-900 rounded-xl shadow-md"
                 >
+                  {/* Character Image */}
                   <img
                     src={item.character.images.jpg.image_url}
                     alt={item.character.name}
@@ -98,6 +104,7 @@ export default async function AnimeDetail({ params }: { params: any }) {
                     <h3 className="font-semibold text-lg">{item.character.name}</h3>
                     <p className="text-gray-400 text-sm mb-2">{item.role}</p>
 
+                    {/* Voice Actor */}
                     {item.voice_actors.length > 0 && (
                       <div className="flex items-center gap-3 mt-2">
                         <img
@@ -120,6 +127,33 @@ export default async function AnimeDetail({ params }: { params: any }) {
               ))}
             </div>
           </section>
+
+          {/* RECOMMENDATIONS */}
+          <section className="mt-20">
+            <h2 className="text-3xl font-semibold mb-6">Recommended Anime</h2>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+              {recommendations.map((rec: any) => (
+                <a
+                  key={rec.entry.mal_id}
+                  href={`/anime/${rec.entry.mal_id}`}
+                  className="group bg-gray-900 rounded-xl overflow-hidden shadow-lg hover:scale-105 transition-transform duration-200"
+                >
+                  <img
+                    src={rec.entry.images.jpg.image_url}
+                    alt={rec.entry.title}
+                    className="w-full h-60 object-cover"
+                  />
+                  <div className="p-3">
+                    <p className="font-semibold text-sm group-hover:text-blue-400 transition-colors">
+                      {rec.entry.title}
+                    </p>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </section>
+
         </div>
       </div>
     </main>
