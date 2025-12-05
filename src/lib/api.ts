@@ -31,3 +31,12 @@ export async function getAnimeRecommendations(id: string) {
   const data = await res.json();
   return data.data || [];
 }
+
+export async function getAnimeEpisodes(id: string, page = 1) {
+  const res = await fetch(`https://api.jikan.moe/v4/anime/${id}/episodes?page=${page}`);
+  const data = await res.json();
+  return {
+    episodes: data.data || [],
+    pagination: data.pagination || {},
+  };
+}

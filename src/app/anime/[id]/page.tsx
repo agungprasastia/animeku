@@ -1,4 +1,5 @@
-import { getAnimeDetail, getAnimeCharacters, getAnimeRecommendations } from "@/lib/api";
+import { 
+  getAnimeDetail, getAnimeCharacters, getAnimeRecommendations, getAnimeEpisodes } from "@/lib/api";
 
 export default async function AnimeDetail({ params }: { params: any }) {
   const { id } = await params;
@@ -6,6 +7,7 @@ export default async function AnimeDetail({ params }: { params: any }) {
   const anime = await getAnimeDetail(id);
   const characters = await getAnimeCharacters(id);
   const recommendations = await getAnimeRecommendations(id);
+  const { episodes, pagination } = await getAnimeEpisodes(id);
 
   if (!anime) {
     return (
@@ -20,20 +22,20 @@ export default async function AnimeDetail({ params }: { params: any }) {
       <h1 className="text-4xl font-bold mb-8">{anime.title}</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-10">
-        {/* Anime Poster */}
+
+        {/* POSTER */}
         <img
           src={anime.images.jpg.large_image_url}
           alt={anime.title}
           className="w-full rounded-lg shadow-lg"
         />
 
-        {/* Right Content Panel */}
         <div className="space-y-10">
 
           {/* SYNOPSIS */}
           <section>
             <h2 className="text-2xl font-semibold mb-3">Synopsis</h2>
-            <p className="text-gray-300 leading-relaxed">{anime.synopsis}</p>
+            <p className="text-gray-300">{anime.synopsis}</p>
           </section>
 
           {/* GENRES */}
@@ -41,7 +43,7 @@ export default async function AnimeDetail({ params }: { params: any }) {
             <h2 className="text-2xl font-semibold mb-3">Genres</h2>
             <div className="flex flex-wrap gap-2">
               {anime.genres.map((g: any) => (
-                <span
+                <span 
                   key={g.mal_id}
                   className="px-3 py-1 bg-gray-800 rounded-full text-sm"
                 >
@@ -77,8 +79,8 @@ export default async function AnimeDetail({ params }: { params: any }) {
                 src={anime.trailer.embed_url}
                 width="100%"
                 height="315"
-                allowFullScreen
                 className="rounded-lg shadow-lg"
+                allowFullScreen
               />
             </section>
           )}
@@ -86,17 +88,15 @@ export default async function AnimeDetail({ params }: { params: any }) {
           {/* CHARACTERS */}
           <section className="mt-16">
             <h2 className="text-3xl font-semibold mb-6">Characters & Voice Actors</h2>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
               {characters.map((item: any) => (
-                <div
+                <div 
                   key={item.character.mal_id}
                   className="flex items-center gap-4 p-4 bg-gray-900 rounded-xl shadow-md"
                 >
-                  {/* Character Image */}
                   <img
                     src={item.character.images.jpg.image_url}
-                    alt={item.character.name}
                     className="w-20 h-28 object-cover rounded-lg"
                   />
 
@@ -104,12 +104,10 @@ export default async function AnimeDetail({ params }: { params: any }) {
                     <h3 className="font-semibold text-lg">{item.character.name}</h3>
                     <p className="text-gray-400 text-sm mb-2">{item.role}</p>
 
-                    {/* Voice Actor */}
-                    {item.voice_actors.length > 0 && (
+                    {item.voice_actors[0] && (
                       <div className="flex items-center gap-3 mt-2">
                         <img
                           src={item.voice_actors[0].person.images.jpg.image_url}
-                          alt={item.voice_actors[0].person.name}
                           className="w-12 h-16 object-cover rounded-md"
                         />
                         <div>
@@ -122,36 +120,84 @@ export default async function AnimeDetail({ params }: { params: any }) {
                         </div>
                       </div>
                     )}
+
                   </div>
                 </div>
               ))}
+
             </div>
           </section>
 
           {/* RECOMMENDATIONS */}
           <section className="mt-20">
             <h2 className="text-3xl font-semibold mb-6">Recommended Anime</h2>
-
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+
               {recommendations.map((rec: any) => (
                 <a
                   key={rec.entry.mal_id}
                   href={`/anime/${rec.entry.mal_id}`}
-                  className="group bg-gray-900 rounded-xl overflow-hidden shadow-lg hover:scale-105 transition-transform duration-200"
+                  className="group bg-gray-900 rounded-xl overflow-hidden shadow-lg 
+                             hover:scale-105 transition-transform duration-200"
                 >
                   <img
                     src={rec.entry.images.jpg.image_url}
-                    alt={rec.entry.title}
                     className="w-full h-60 object-cover"
                   />
                   <div className="p-3">
-                    <p className="font-semibold text-sm group-hover:text-blue-400 transition-colors">
+                    <p className="font-semibold text-sm group-hover:text-blue-400">
                       {rec.entry.title}
                     </p>
                   </div>
                 </a>
               ))}
+
             </div>
+          </section>
+
+          {/* EPISODE LIST */}
+          <section className="mt-20">
+            <h2 className="text-3xl font-semibold mb-6">Episodes</h2>
+
+            {episodes.length === 0 ? (
+              <p className="text-gray-400">No episodes available.</p>
+            ) : (
+              <div className="space-y-4">
+
+                {episodes.map((ep: any) => (
+                  <div
+                    key={ep.mal_id}
+                    className="p-4 bg-gray-900 rounded-lg shadow-md flex flex-col md:flex-row justify-between"
+                  >
+                    <div>
+                      <p className="font-bold text-lg">
+                        Episode {ep.mal_id}: {ep.title || "Untitled"}
+                      </p>
+                      {ep.aired && (
+                        <p className="text-gray-400 text-sm">Aired: {ep.aired}</p>
+                      )}
+                    </div>
+
+                    {ep.score && (
+                      <p className="text-sm bg-gray-800 px-3 py-1 rounded-lg">
+                        Score: {ep.score}
+                      </p>
+                    )}
+                  </div>
+                ))}
+
+              </div>
+            )}
+
+            {pagination?.has_next_page && (
+              <a
+                href={`/anime/${id}?page=${pagination.current_page + 1}`}
+                className="block mt-4 text-blue-400 hover:underline"
+              >
+                Next Page →
+              </a>
+            )}
+
           </section>
 
         </div>
