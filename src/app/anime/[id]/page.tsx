@@ -27,16 +27,13 @@ export default async function AnimeDetail({ params, searchParams }: Props) {
   const anime = await getAnimeDetail(id);
   if (!anime) return notFound();
 
-  // BATCH 1: Ambil data penting (Streaming & Characters)
   const [streaming, characters] = await Promise.all([
     getAnimeStreaming(id),
     getAnimeCharacters(id)
   ]);
 
-  // JEDA: Beri napas ke API agar tidak kena Rate Limit sebelum request berikutnya
   await delay(1000);
 
-  // BATCH 2: Ambil data sisanya (Recommendations & Episodes)
   const [recommendations, episodesData] = await Promise.all([
     getAnimeRecommendations(id),
     getAnimeEpisodes(id, pageNumber)
