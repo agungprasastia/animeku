@@ -1,32 +1,29 @@
-import { 
-  getAnimeDetail, getAnimeCharacters, getAnimeRecommendations, getAnimeEpisodes } from "@/lib/api";
+import {
+  getAnimeDetail,
+  getAnimeCharacters,
+  getAnimeRecommendations,
+  getAnimeEpisodes
+} from "@/lib/api";
 import { notFound } from "next/navigation";
 
-export default async function AnimeDetail({
-  params,
-  searchParams = {},
-}: {
-  params: any;
-  searchParams?: any;
-}) {
-  let resolvedParams = params;
-  if (params && typeof params.then === "function") {
-    resolvedParams = await params;
-  }
+type Props = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ page?: string }>;
+};
 
-  const id = resolvedParams?.id;
-  const pageNumber = Number(
-    (searchParams && searchParams.page) ? searchParams.page : 1
-  );
-
+export default async function AnimeDetail({ params, searchParams }: Props) {
+  const { id } = await params;
   if (!id) return notFound();
+
+  const query = await searchParams;
+  const pageNumber = Number(query?.page ?? 1);
 
   const anime = await getAnimeDetail(id);
   if (!anime) return notFound();
 
   const [characters, recommendations] = await Promise.all([
     getAnimeCharacters(id),
-    getAnimeRecommendations(id),
+    getAnimeRecommendations(id)
   ]);
 
   const { episodes, pagination } = await getAnimeEpisodes(id, pageNumber);
@@ -39,7 +36,7 @@ export default async function AnimeDetail({
 
         {/* POSTER */}
         <img
-          src={anime.images.jpg.large_image_url}
+          src={anime.images?.jpg?.large_image_url}
           alt={anime.title}
           className="w-full rounded-lg shadow-lg"
         />
@@ -56,8 +53,8 @@ export default async function AnimeDetail({
           <section>
             <h2 className="text-2xl font-semibold mb-3">Genres</h2>
             <div className="flex flex-wrap gap-2">
-              {anime.genres.map((g: any) => (
-                <span 
+              {anime.genres?.map((g: any) => (
+                <span
                   key={g.mal_id}
                   className="px-3 py-1 bg-gray-800 rounded-full text-sm"
                 >
@@ -70,19 +67,19 @@ export default async function AnimeDetail({
           {/* STATS */}
           <section>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-              <p><strong>Score:</strong> {anime.score}</p>
-              <p><strong>Rank:</strong> #{anime.rank}</p>
-              <p><strong>Popularity:</strong> {anime.popularity}</p>
-              <p><strong>Members:</strong> {anime.members}</p>
-              <p><strong>Episodes:</strong> {anime.episodes}</p>
-              <p><strong>Status:</strong> {anime.status}</p>
+              <p><strong>Score:</strong> {anime.score ?? "—"}</p>
+              <p><strong>Rank:</strong> #{anime.rank ?? "—"}</p>
+              <p><strong>Popularity:</strong> {anime.popularity ?? "—"}</p>
+              <p><strong>Members:</strong> {anime.members ?? "—"}</p>
+              <p><strong>Episodes:</strong> {anime.episodes ?? "—"}</p>
+              <p><strong>Status:</strong> {anime.status ?? "—"}</p>
             </div>
           </section>
 
           {/* STUDIOS */}
           <section>
             <h2 className="text-2xl font-semibold mb-3">Studios</h2>
-            <p>{anime.studios.map((s: any) => s.name).join(", ")}</p>
+            <p>{anime.studios?.map((s: any) => s.name).join(", ") ?? "—"}</p>
           </section>
 
           {/* TRAILER */}
@@ -101,9 +98,7 @@ export default async function AnimeDetail({
 
           {/* CHARACTERS */}
           <section className="mt-16">
-            <h2 className="text-3xl font-semibold mb-6">
-              Characters & Voice Actors
-            </h2>
+            <h2 className="text-3xl font-semibold mb-6">Characters & Voice Actors</h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {characters.map((item: any) => (
@@ -113,6 +108,7 @@ export default async function AnimeDetail({
                 >
                   <img
                     src={item.character.images.jpg.image_url}
+                    alt={item.character.name}
                     className="w-20 h-28 object-cover rounded-lg"
                   />
 
@@ -120,10 +116,11 @@ export default async function AnimeDetail({
                     <h3 className="font-semibold text-lg">{item.character.name}</h3>
                     <p className="text-gray-400 text-sm mb-2">{item.role}</p>
 
-                    {item.voice_actors[0] && (
+                    {item.voice_actors?.[0] && (
                       <div className="flex items-center gap-3 mt-2">
                         <img
                           src={item.voice_actors[0].person.images.jpg.image_url}
+                          alt={item.voice_actors[0].person.name}
                           className="w-12 h-16 object-cover rounded-md"
                         />
                         <div>
@@ -151,11 +148,12 @@ export default async function AnimeDetail({
                 <a
                   key={rec.entry.mal_id}
                   href={`/anime/${rec.entry.mal_id}`}
-                  className="group bg-gray-900 rounded-xl overflow-hidden shadow-lg hover:scale-105 transition-transform"
+                  className="group bg-gray-900 rounded-xl overflow-hidden shadow-lg hover:scale-105 transition"
                 >
                   <img
                     src={rec.entry.images.jpg.image_url}
                     className="w-full h-60 object-cover"
+                    alt={rec.entry.title}
                   />
                   <div className="p-3">
                     <p className="font-semibold text-sm group-hover:text-blue-400">
@@ -167,7 +165,7 @@ export default async function AnimeDetail({
             </div>
           </section>
 
-          {/* EPISODE LIST */}
+          {/* EPISODES */}
           <section className="mt-20">
             <h2 className="text-3xl font-semibold mb-6">Episodes</h2>
 
@@ -195,7 +193,7 @@ export default async function AnimeDetail({
 
             {/* PAGINATION */}
             <div className="flex justify-between items-center mt-6">
-              {pagination.current_page > 1 ? (
+              {pagination?.current_page > 1 ? (
                 <a
                   href={`/anime/${id}?page=${pagination.current_page - 1}`}
                   className="px-4 py-2 bg-gray-800 rounded-lg hover:bg-gray-700"
@@ -207,10 +205,11 @@ export default async function AnimeDetail({
               )}
 
               <span className="text-gray-300">
-                Page {pagination.current_page} / {pagination.last_visible_page}
+                Page {pagination?.current_page ?? 1} /{" "}
+                {pagination?.last_visible_page ?? 1}
               </span>
 
-              {pagination.has_next_page ? (
+              {pagination?.has_next_page ? (
                 <a
                   href={`/anime/${id}?page=${pagination.current_page + 1}`}
                   className="px-4 py-2 bg-gray-800 rounded-lg hover:bg-gray-700"
@@ -222,7 +221,6 @@ export default async function AnimeDetail({
               )}
             </div>
           </section>
-
         </div>
       </div>
     </main>
