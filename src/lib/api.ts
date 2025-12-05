@@ -40,3 +40,10 @@ export async function getAnimeEpisodes(id: string, page = 1) {
     pagination: data.pagination || {},
   };
 }
+
+export async function getAnimeStreaming(id: string) {
+  const res = await fetch(`https://api.jikan.moe/v4/anime/${id}/streaming`);
+  const data = await res.json();
+  return data.data || [];
+}
+

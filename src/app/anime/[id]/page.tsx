@@ -2,7 +2,8 @@ import {
   getAnimeDetail,
   getAnimeCharacters,
   getAnimeRecommendations,
-  getAnimeEpisodes
+  getAnimeEpisodes,
+  getAnimeStreaming
 } from "@/lib/api";
 import { notFound } from "next/navigation";
 
@@ -21,9 +22,10 @@ export default async function AnimeDetail({ params, searchParams }: Props) {
   const anime = await getAnimeDetail(id);
   if (!anime) return notFound();
 
-  const [characters, recommendations] = await Promise.all([
+  const [characters, recommendations, streaming] = await Promise.all([
     getAnimeCharacters(id),
-    getAnimeRecommendations(id)
+    getAnimeRecommendations(id),
+    getAnimeStreaming(id)
   ]);
 
   const { episodes, pagination } = await getAnimeEpisodes(id, pageNumber);
@@ -33,8 +35,6 @@ export default async function AnimeDetail({ params, searchParams }: Props) {
       <h1 className="text-4xl font-bold mb-8">{anime.title}</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-10">
-
-        {/* POSTER */}
         <img
           src={anime.images?.jpg?.large_image_url}
           alt={anime.title}
@@ -42,14 +42,11 @@ export default async function AnimeDetail({ params, searchParams }: Props) {
         />
 
         <div className="space-y-10">
-
-          {/* SYNOPSIS */}
           <section>
             <h2 className="text-2xl font-semibold mb-3">Synopsis</h2>
             <p className="text-gray-300 leading-relaxed">{anime.synopsis}</p>
           </section>
 
-          {/* GENRES */}
           <section>
             <h2 className="text-2xl font-semibold mb-3">Genres</h2>
             <div className="flex flex-wrap gap-2">
@@ -64,7 +61,6 @@ export default async function AnimeDetail({ params, searchParams }: Props) {
             </div>
           </section>
 
-          {/* STATS */}
           <section>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
               <p><strong>Score:</strong> {anime.score ?? "—"}</p>
@@ -76,13 +72,11 @@ export default async function AnimeDetail({ params, searchParams }: Props) {
             </div>
           </section>
 
-          {/* STUDIOS */}
           <section>
             <h2 className="text-2xl font-semibold mb-3">Studios</h2>
             <p>{anime.studios?.map((s: any) => s.name).join(", ") ?? "—"}</p>
           </section>
 
-          {/* TRAILER */}
           {anime.trailer?.embed_url && (
             <section>
               <h2 className="text-2xl font-semibold mb-3">Trailer</h2>
@@ -96,10 +90,8 @@ export default async function AnimeDetail({ params, searchParams }: Props) {
             </section>
           )}
 
-          {/* CHARACTERS */}
           <section className="mt-16">
             <h2 className="text-3xl font-semibold mb-6">Characters & Voice Actors</h2>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {characters.map((item: any) => (
                 <div
@@ -111,11 +103,9 @@ export default async function AnimeDetail({ params, searchParams }: Props) {
                     alt={item.character.name}
                     className="w-20 h-28 object-cover rounded-lg"
                   />
-
                   <div className="flex-1">
                     <h3 className="font-semibold text-lg">{item.character.name}</h3>
                     <p className="text-gray-400 text-sm mb-2">{item.role}</p>
-
                     {item.voice_actors?.[0] && (
                       <div className="flex items-center gap-3 mt-2">
                         <img
@@ -139,10 +129,8 @@ export default async function AnimeDetail({ params, searchParams }: Props) {
             </div>
           </section>
 
-          {/* RECOMMENDATIONS */}
           <section className="mt-20">
             <h2 className="text-3xl font-semibold mb-6">Recommended Anime</h2>
-
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
               {recommendations.map((rec: any) => (
                 <a
@@ -165,10 +153,8 @@ export default async function AnimeDetail({ params, searchParams }: Props) {
             </div>
           </section>
 
-          {/* EPISODES */}
           <section className="mt-20">
             <h2 className="text-3xl font-semibold mb-6">Episodes</h2>
-
             {episodes.length === 0 ? (
               <p className="text-gray-400">No episodes available.</p>
             ) : (
@@ -191,7 +177,6 @@ export default async function AnimeDetail({ params, searchParams }: Props) {
               </div>
             )}
 
-            {/* PAGINATION */}
             <div className="flex justify-between items-center mt-6">
               {pagination?.current_page > 1 ? (
                 <a
@@ -221,6 +206,28 @@ export default async function AnimeDetail({ params, searchParams }: Props) {
               )}
             </div>
           </section>
+
+          {streaming.length > 0 && (
+            <section className="mt-10">
+              <h2 className="text-2xl font-semibold mb-4">Watch On (Legal Streaming)</h2>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {streaming.map((site: any, index: number) => (
+                  <a
+                    key={index}
+                    href={site.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-gray-900 border border-gray-700 rounded-xl p-4 hover:bg-gray-800 transition shadow-md group"
+                  >
+                    <p className="text-lg font-semibold group-hover:text-blue-400">
+                      {site.name}
+                    </p>
+                    <p className="text-gray-400 text-sm">Click to watch</p>
+                  </a>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       </div>
     </main>
