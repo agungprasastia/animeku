@@ -6,11 +6,16 @@ import {
   getAnimeStreaming
 } from "@/lib/api";
 import { notFound } from "next/navigation";
+import Link from "next/link";
 
 type Props = {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ page?: string }>;
 };
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export default async function AnimeDetail({ params, searchParams }: Props) {
   const { id } = await params;
@@ -22,13 +27,22 @@ export default async function AnimeDetail({ params, searchParams }: Props) {
   const anime = await getAnimeDetail(id);
   if (!anime) return notFound();
 
-  const [characters, recommendations, streaming] = await Promise.all([
-    getAnimeCharacters(id),
-    getAnimeRecommendations(id),
-    getAnimeStreaming(id)
+  // BATCH 1: Ambil data penting (Streaming & Characters)
+  const [streaming, characters] = await Promise.all([
+    getAnimeStreaming(id),
+    getAnimeCharacters(id)
   ]);
 
-  const { episodes, pagination } = await getAnimeEpisodes(id, pageNumber);
+  // JEDA: Beri napas ke API agar tidak kena Rate Limit sebelum request berikutnya
+  await delay(1000);
+
+  // BATCH 2: Ambil data sisanya (Recommendations & Episodes)
+  const [recommendations, episodesData] = await Promise.all([
+    getAnimeRecommendations(id),
+    getAnimeEpisodes(id, pageNumber)
+  ]);
+
+  const { episodes, pagination } = episodesData;
 
   return (
     <main className="max-w-6xl mx-auto p-4 md:p-6">
@@ -90,6 +104,28 @@ export default async function AnimeDetail({ params, searchParams }: Props) {
             </section>
           )}
 
+          {streaming.length > 0 && (
+            <section>
+              <h2 className="text-2xl font-semibold mb-4">Watch On (Legal Streaming)</h2>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {streaming.map((site: any, index: number) => (
+                  <a
+                    key={index}
+                    href={site.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-gray-900 border border-gray-700 rounded-xl p-4 hover:bg-gray-800 transition shadow-md group"
+                  >
+                    <p className="text-lg font-semibold group-hover:text-blue-400">
+                      {site.name}
+                    </p>
+                    <p className="text-gray-400 text-sm">Click to watch</p>
+                  </a>
+                ))}
+              </div>
+            </section>
+          )}
+
           <section className="mt-16">
             <h2 className="text-3xl font-semibold mb-6">Characters & Voice Actors</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -133,7 +169,7 @@ export default async function AnimeDetail({ params, searchParams }: Props) {
             <h2 className="text-3xl font-semibold mb-6">Recommended Anime</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
               {recommendations.map((rec: any) => (
-                <a
+                <Link
                   key={rec.entry.mal_id}
                   href={`/anime/${rec.entry.mal_id}`}
                   className="group bg-gray-900 rounded-xl overflow-hidden shadow-lg hover:scale-105 transition"
@@ -148,7 +184,7 @@ export default async function AnimeDetail({ params, searchParams }: Props) {
                       {rec.entry.title}
                     </p>
                   </div>
-                </a>
+                </Link>
               ))}
             </div>
           </section>
@@ -179,12 +215,12 @@ export default async function AnimeDetail({ params, searchParams }: Props) {
 
             <div className="flex justify-between items-center mt-6">
               {pagination?.current_page > 1 ? (
-                <a
+                <Link
                   href={`/anime/${id}?page=${pagination.current_page - 1}`}
                   className="px-4 py-2 bg-gray-800 rounded-lg hover:bg-gray-700"
                 >
                   ← Previous
-                </a>
+                </Link>
               ) : (
                 <span className="px-4 py-2 text-gray-600">← Previous</span>
               )}
@@ -195,39 +231,17 @@ export default async function AnimeDetail({ params, searchParams }: Props) {
               </span>
 
               {pagination?.has_next_page ? (
-                <a
+                <Link
                   href={`/anime/${id}?page=${pagination.current_page + 1}`}
                   className="px-4 py-2 bg-gray-800 rounded-lg hover:bg-gray-700"
                 >
                   Next →
-                </a>
+                </Link>
               ) : (
                 <span className="px-4 py-2 text-gray-600">Next →</span>
               )}
             </div>
           </section>
-
-          {streaming.length > 0 && (
-            <section className="mt-10">
-              <h2 className="text-2xl font-semibold mb-4">Watch On (Legal Streaming)</h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {streaming.map((site: any, index: number) => (
-                  <a
-                    key={index}
-                    href={site.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bg-gray-900 border border-gray-700 rounded-xl p-4 hover:bg-gray-800 transition shadow-md group"
-                  >
-                    <p className="text-lg font-semibold group-hover:text-blue-400">
-                      {site.name}
-                    </p>
-                    <p className="text-gray-400 text-sm">Click to watch</p>
-                  </a>
-                ))}
-              </div>
-            </section>
-          )}
         </div>
       </div>
     </main>
