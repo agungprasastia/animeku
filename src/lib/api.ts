@@ -26,3 +26,8 @@ export async function getAnimeCharacters(id: string) {
   return data.data || [];
 }
 
+export async function getAnimeRecommendations(id: string) {
+  const res = await fetch(`https://api.jikan.moe/v4/anime/${id}/recommendations`);
+  const data = await res.json();
+  return data.data || [];
+}
