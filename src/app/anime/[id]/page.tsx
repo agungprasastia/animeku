@@ -1,302 +1,295 @@
-import {
-  getAnimeDetail,
-  getAnimeCharacters,
+import { 
+  getAnimeDetail, 
+  getAnimeCharacters, 
+  getAnimeRelations, 
+  getAnimeStreaming, 
+  getAnimeThemes, 
   getAnimeRecommendations,
+  getAnimeStaff,
   getAnimeEpisodes,
-  getAnimeStreaming,
-  getAnimeReviews,
-  getAnimeStaff
+  getAnimeReviews
 } from "@/lib/api";
-import { notFound } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
+import { notFound } from "next/navigation";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Star, Tv, Users, Heart, Calendar, MessageSquare } from "lucide-react";
+import ReviewCard from "@/components/ReviewCard";
 
-type Props = {
-  params: Promise<{ id: string }>;
-  searchParams: Promise<{ page?: string }>;
-};
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Ubah delay jadi lebih singkat (cukup untuk napas sebentar)
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// Retry logic tetap dipertahankan untuk keamanan
-async function fetchWithRetry(fetcher: Function, args: any[], retries = 2, delayMs = 300) {
-  for (let i = 0; i < retries; i++) {
-    try {
-      const data = await fetcher(...args);
-      if (Array.isArray(data) && data.length > 0) return data;
-      if (data?.reviews?.length > 0) return data;
-    } catch (error) {
-      console.warn(`Percobaan ke-${i + 1} gagal.`);
-    }
-    await delay(delayMs);
+async function fetchSafe(fn: () => Promise<any>, fallback: any) {
+  try {
+    return await fn();
+  } catch (error) {
+    return fallback;
   }
-  return { reviews: [], pagination: {} }; 
 }
 
-export default async function AnimeDetail({ params, searchParams }: Props) {
+export const revalidate = 3600;
+
+interface PageProps {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}
+
+export default async function AnimeDetail({ params }: PageProps) {
   const { id } = await params;
-  if (!id) return notFound();
 
-  const query = await searchParams;
-  const pageNumber = Number(query?.page ?? 1);
-
-  // --- BATCH 1: UTAMA (Wajib Cepat) ---
-  // Kita ambil Detail & Karakter & Staff BEBARENGAN.
-  // Jikan biasanya kuat menampung 3 request awal ini.
-  const animeData = getAnimeDetail(id);
-  const charactersData = getAnimeCharacters(id);
-  const staffData = getAnimeStaff(id);
-
-  // Tunggu Batch 1 selesai
-  const [anime, characters, staff] = await Promise.all([
-    animeData,
-    charactersData,
-    staffData
-  ]);
-
+  const anime = await getAnimeDetail(id);
   if (!anime) return notFound();
 
-  // Sorting Characters (Main Character di depan)
-  const sortedCharacters = (characters || []).sort((a: any, b: any) => {
-    if (a.role === "Main" && b.role !== "Main") return -1;
-    if (a.role !== "Main" && b.role === "Main") return 1;
-    return 0;
-  });
+  const [streaming, relations] = await Promise.all([
+    fetchSafe(() => getAnimeStreaming(id), []),
+    fetchSafe(() => getAnimeRelations(id), [])
+  ]);
+  await delay(1000);
 
-  // JEDA SINGKAT: Cuma 200ms (sebelumnya 800ms)
-  // Cukup untuk menghindari block, tapi tidak terasa lama oleh user
-  await delay(200); 
+  const [characters, episodesData] = await Promise.all([
+    fetchSafe(() => getAnimeCharacters(id), []),
+    fetchSafe(() => getAnimeEpisodes(id), { episodes: [] })
+  ]);
+  await delay(1000);
 
-  // --- BATCH 2: PENDUKUNG ---
-  // Ambil sisa data sekaligus
-  const [streaming, recommendations, episodesData, reviewsData] = await Promise.all([
-    getAnimeStreaming(id),
-    getAnimeRecommendations(id),
-    getAnimeEpisodes(id, pageNumber),
-    fetchWithRetry(getAnimeReviews, [id, 1]) // Reviews pakai retry
+  const [reviewsData, staff] = await Promise.all([
+    fetchSafe(() => getAnimeReviews(id), { reviews: [] }),
+    fetchSafe(() => getAnimeStaff(id), [])
+  ]);
+  await delay(1000);
+
+  const [themes, recommendations] = await Promise.all([
+    fetchSafe(() => getAnimeThemes(id), { openings: [], endings: [] }),
+    fetchSafe(() => getAnimeRecommendations(id), [])
   ]);
 
-  const { episodes, pagination } = episodesData;
-  // Validasi fallback reviews
-  const reviews = Array.isArray(reviewsData) ? [] : (reviewsData.reviews || []);
+  const episodes = episodesData?.episodes || [];
+  const reviews = reviewsData?.reviews || [];
+  const sortedCharacters = characters.sort((a: any, b: any) => 
+    (a.role === "Main" ? -1 : 1) - (b.role === "Main" ? -1 : 1)
+  ).slice(0, 12); 
 
   return (
-    <main className="max-w-6xl mx-auto p-4 md:p-6">
+    <div className="space-y-8 py-6 animate-in fade-in duration-500">
       
-      <style>{`
-        .scrollbar-hide::-webkit-scrollbar { display: none; }
-        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-      `}</style>
-
-      <h1 className="text-4xl font-bold mb-8">{anime.title}</h1>
-
-      <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-10">
+      {/* HEADER SECTION */}
+      <div className="flex flex-col md:flex-row gap-8">
         
-        {/* POSTER */}
-        <img
-          src={anime.images?.jpg?.large_image_url}
-          alt={anime.title}
-          className="w-full rounded-lg shadow-lg"
-        />
+        {/* LEFT SIDEBAR */}
+        <aside className="w-full md:w-[300px] shrink-0 space-y-6">
+          <div className="relative aspect-[2/3] w-full overflow-hidden rounded-xl shadow-2xl border">
+            <Image
+              src={anime.images.jpg.large_image_url || anime.images.jpg.image_url}
+              alt={anime.title}
+              fill
+              className="object-cover"
+              priority
+              sizes="(max-width: 768px) 100vw, 300px"
+            />
+          </div>
 
-        <div className="space-y-10 min-w-0">
+          <Card>
+            <CardHeader className="pb-3"><CardTitle>Information</CardTitle></CardHeader>
+            <CardContent className="grid gap-4 text-sm">
+              <div className="flex justify-between border-b pb-2"><span className="text-muted-foreground">Type</span><span className="font-medium">{anime.type}</span></div>
+              <div className="flex justify-between border-b pb-2"><span className="text-muted-foreground">Episodes</span><span className="font-medium">{anime.episodes || "?"}</span></div>
+              <div className="flex justify-between border-b pb-2"><span className="text-muted-foreground">Status</span><Badge variant="outline">{anime.status}</Badge></div>
+              <div className="flex justify-between border-b pb-2"><span className="text-muted-foreground">Aired</span><span className="font-medium text-right w-1/2">{anime.aired.string}</span></div>
+              <div className="flex justify-between border-b pb-2"><span className="text-muted-foreground">Studio</span><span className="font-medium text-right">{anime.studios.map((s: any) => s.name).join(", ") || "-"}</span></div>
+              <div className="flex justify-between border-b pb-2"><span className="text-muted-foreground">Rating</span><span className="font-medium">{anime.rating}</span></div>
+            </CardContent>
+          </Card>
 
-          {/* SYNOPSIS */}
-          <section>
-            <h2 className="text-2xl font-semibold mb-3">Synopsis</h2>
-            <p className="text-gray-300 leading-relaxed">{anime.synopsis}</p>
-          </section>
-
-          {/* GENRES */}
-          <section>
-            <h2 className="text-2xl font-semibold mb-3">Genres</h2>
-            <div className="flex flex-wrap gap-2">
-              {anime.genres?.map((g: any) => (
-                <span key={g.mal_id} className="px-3 py-1 bg-gray-800 rounded-full text-sm">
-                  {g.name}
-                </span>
-              ))}
-            </div>
-          </section>
-
-          {/* STATS */}
-          <section>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-              <p><strong>Score:</strong> {anime.score ?? "—"}</p>
-              <p><strong>Rank:</strong> #{anime.rank ?? "—"}</p>
-              <p><strong>Popularity:</strong> {anime.popularity ?? "—"}</p>
-              <p><strong>Members:</strong> {anime.members ?? "—"}</p>
-              <p><strong>Episodes:</strong> {anime.episodes ?? "—"}</p>
-              <p><strong>Status:</strong> {anime.status ?? "—"}</p>
-            </div>
-          </section>
-
-          {/* STUDIOS */}
-          <section>
-            <h2 className="text-2xl font-semibold mb-3">Studios</h2>
-            <p>{anime.studios?.map((s: any) => s.name).join(", ") ?? "—"}</p>
-          </section>
-
-          {/* TRAILER */}
-          {anime.trailer?.embed_url && (
-            <section>
-              <h2 className="text-2xl font-semibold mb-3">Trailer</h2>
-              <iframe
-                src={anime.trailer.embed_url}
-                className="w-full h-72 rounded-lg shadow-lg"
-                allowFullScreen
-              />
-            </section>
-          )}
-
-          {/* STREAMING */}
           {streaming.length > 0 && (
-            <section>
-              <h2 className="text-2xl font-semibold mb-4">Watch On (Legal Streaming)</h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {streaming.map((site: any, index: number) => (
-                  <a
-                    key={index}
-                    href={site.url}
-                    target="_blank"
-                    className="bg-gray-900 border border-gray-700 rounded-xl p-4 hover:bg-gray-800 transition"
-                  >
-                    <p className="text-lg font-semibold">{site.name}</p>
-                    <p className="text-gray-400 text-sm">Click to watch</p>
+            <Card>
+              <CardHeader className="pb-3"><CardTitle>Streaming</CardTitle></CardHeader>
+              <CardContent className="flex flex-wrap gap-2">
+                {streaming.map((s: any, i: number) => (
+                  <a key={i} href={s.url} target="_blank" rel="noreferrer">
+                    <Badge variant="outline" className="hover:bg-primary hover:text-white cursor-pointer py-1">{s.name}</Badge>
                   </a>
                 ))}
-              </div>
-            </section>
+              </CardContent>
+            </Card>
+          )}
+        </aside>
+
+        {/* MAIN CONTENT */}
+        <div className="flex-1 min-w-0 space-y-8">
+          <div>
+            <h1 className="text-4xl font-extrabold tracking-tight lg:text-5xl mb-2">{anime.title}</h1>
+            {anime.title_english && <p className="text-xl text-muted-foreground mb-4">{anime.title_english}</p>}
+            <div className="flex flex-wrap gap-3 items-center mb-6">
+              <Badge variant="secondary" className="text-lg px-3 py-1 flex items-center gap-1.5">
+                <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" /> {anime.score || "N/A"}
+              </Badge>
+              <span className="text-muted-foreground text-sm flex items-center gap-1"><Users className="h-4 w-4" /> {anime.members?.toLocaleString()} Members</span>
+              <span className="text-muted-foreground text-sm flex items-center gap-1"><Heart className="h-4 w-4" /> #{anime.popularity} Popularity</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {anime.genres.map((g: any) => <Badge key={g.mal_id} variant="outline">{g.name}</Badge>)}
+              {anime.themes.map((t: any) => <Badge key={t.mal_id} variant="secondary">{t.name}</Badge>)}
+            </div>
+          </div>
+
+          <div className="prose dark:prose-invert max-w-none text-muted-foreground leading-relaxed">
+            <p>{anime.synopsis}</p>
+          </div>
+
+          {anime.trailer?.youtube_id && (
+            <div className="aspect-video w-full rounded-xl overflow-hidden shadow-lg border bg-muted">
+              <iframe src={`https://www.youtube.com/embed/${anime.trailer.youtube_id}`} title="Anime Trailer" className="w-full h-full" allowFullScreen />
+            </div>
           )}
 
-          {/* CHARACTERS (SCROLLABLE & FIXED KEYS) */}
-          <section className="mt-16">
-            <div className="flex justify-between items-end mb-4">
-              <h2 className="text-3xl font-semibold">Characters</h2>
-              <span className="text-sm text-gray-400">Scroll for more →</span>
-            </div>
-
-            {sortedCharacters.length === 0 ? (
-              <p className="text-gray-400">No character information available.</p>
-            ) : (
-              <div className="flex overflow-x-auto gap-4 pb-4 scrollbar-hide snap-x">
-                {sortedCharacters.map((item: any, index: number) => (
-                  <div key={`${item.character.mal_id}-${index}`} className="flex-shrink-0 w-80 p-4 bg-gray-900 rounded-xl shadow-md flex gap-4 snap-start">
-                    <img src={item.character.images?.jpg?.image_url} className="w-20 h-28 rounded-lg object-cover" alt={item.character.name} />
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-lg truncate" title={item.character.name}>{item.character.name}</h3>
-                      <span className={`text-xs px-2 py-0.5 rounded ${item.role === 'Main' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'}`}>{item.role}</span>
-                      {item.voice_actors?.[0] && (
-                        <div className="flex items-center gap-3 mt-3">
-                          <img src={item.voice_actors[0].person.images?.jpg?.image_url} className="w-10 h-14 rounded-md object-cover" />
-                          <div className="min-w-0">
-                            <p className="font-medium text-sm truncate">{item.voice_actors[0].person.name}</p>
-                            <p className="text-gray-400 text-xs">{item.voice_actors[0].language}</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-
-          {/* STAFF (SCROLLABLE & FIXED KEYS) */}
-          <section className="mt-16">
-            <div className="flex justify-between items-end mb-4">
-              <h2 className="text-3xl font-semibold">Staff</h2>
-              <span className="text-sm text-gray-400">Scroll for more →</span>
-            </div>
-            {staff.length === 0 ? (
-              <p className="text-gray-400">No staff information available.</p>
-            ) : (
-              <div className="flex overflow-x-auto gap-4 pb-4 scrollbar-hide snap-x">
-                {staff.map((item: any, index: number) => (
-                  <div key={`${item.person.mal_id}-${index}`} className="flex-shrink-0 w-72 flex items-center gap-4 p-4 bg-gray-900 rounded-xl shadow-md snap-start">
-                    <img src={item.person.images?.jpg?.image_url} className="w-16 h-16 rounded-lg object-cover" alt={item.person.name} />
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-lg truncate">{item.person.name}</h3>
-                      <p className="text-gray-400 text-sm truncate">{item.positions.join(", ")}</p>
-                      <a href={`https://myanimelist.net/people/${item.person.mal_id}`} target="_blank" className="text-blue-400 text-xs hover:underline mt-1 block">View profile →</a>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-
-          {/* RECOMMENDATIONS (SCROLLABLE & FIXED KEYS) */}
-          <section className="mt-20">
-            <h2 className="text-3xl font-semibold mb-6">Recommended Anime</h2>
-            <div className="flex overflow-x-auto gap-4 pb-4 scrollbar-hide snap-x">
-              {recommendations.map((rec: any, index: number) => (
-                <Link key={`${rec.entry.mal_id}-${index}`} href={`/anime/${rec.entry.mal_id}`} className="flex-shrink-0 w-48 group block bg-gray-900 rounded-xl overflow-hidden shadow-lg hover:scale-105 transition snap-start">
-                  <img src={rec.entry.images?.jpg?.image_url} className="w-full h-64 object-cover" alt={rec.entry.title} />
-                  <div className="p-3"><p className="font-semibold text-sm group-hover:text-blue-400 line-clamp-2">{rec.entry.title}</p></div>
-                </Link>
-              ))}
-            </div>
-          </section>
-
-          {/* REVIEWS */}
-          <section className="mt-20">
-            <h2 className="text-3xl font-semibold mb-6">Reviews</h2>
-            {reviews.length === 0 ? (
-              <p className="text-gray-400">No reviews available (or check connection).</p>
-            ) : (
-              <div className="space-y-6">
-                {reviews.map((rev: any, i: number) => (
-                  <div key={i} className="bg-gray-900 p-5 rounded-xl shadow-md border border-gray-700">
-                    <div className="flex items-start gap-4">
-                      <img src={rev.user.images?.jpg?.image_url ?? "/default-avatar.png"} className="w-14 h-14 rounded-full object-cover" alt={rev.user.username} />
-                      <div className="flex-1">
-                        <div className="flex justify-between">
-                          <h3 className="font-semibold text-lg">{rev.user.username}</h3>
-                          <span className="px-3 py-1 bg-blue-600 rounded-lg text-sm">Score: {rev.score ?? "—"}</span>
-                        </div>
-                        <p className="text-gray-300 mt-2 line-clamp-4">{rev.review}</p>
-                        <p className="text-gray-500 text-sm mt-2">Helpful: {rev.votes} 👍</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-
-          {/* EPISODES */}
-          <section className="mt-20">
-            <h2 className="text-3xl font-semibold mb-6">Episodes</h2>
-            {episodes.length === 0 ? (
-              <p className="text-gray-400">No episodes available.</p>
-            ) : (
-              <div className="space-y-4">
-                {episodes.map((ep: any) => (
-                  <div key={ep.mal_id} className="p-4 bg-gray-900 rounded-lg shadow-md">
-                    <p className="font-bold text-lg">Episode {ep.mal_id}: {ep.title || "Untitled"}</p>
-                    {ep.aired && <p className="text-gray-400 text-sm">Aired: {ep.aired}</p>}
-                  </div>
-                ))}
-              </div>
-            )}
+          {/* TABS AREA */}
+          <Tabs defaultValue="overview" className="w-full">
+            <TabsList className="grid w-full grid-cols-4 lg:w-[400px]">
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="songs">Songs</TabsTrigger>
+              <TabsTrigger value="reviews">Reviews</TabsTrigger>
+              <TabsTrigger value="episodes">Episodes</TabsTrigger>
+            </TabsList>
             
-            {/* PAGINATION */}
-            <div className="flex justify-between items-center mt-6">
-              {pagination?.current_page > 1 ? (
-                <Link href={`/anime/${id}?page=${pagination.current_page - 1}`} className="px-4 py-2 bg-gray-800 rounded-lg hover:bg-gray-700">← Previous</Link>
-              ) : <span className="px-4 py-2 text-gray-600">← Previous</span>}
-              <span className="text-gray-300">Page {pagination?.current_page ?? 1} / {pagination?.last_visible_page ?? 1}</span>
-              {pagination?.has_next_page ? (
-                <Link href={`/anime/${id}?page=${pagination.current_page + 1}`} className="px-4 py-2 bg-gray-800 rounded-lg hover:bg-gray-700">Next →</Link>
-              ) : <span className="px-4 py-2 text-gray-600">Next →</span>}
-            </div>
-          </section>
+            {/* OVERVIEW CONTENT */}
+            <TabsContent value="overview" className="space-y-8 mt-6">
+              {relations.length > 0 && (
+                <section>
+                  <h3 className="text-xl font-bold mb-4 flex items-center gap-2"><Tv className="h-5 w-5" /> Related Anime</h3>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {relations.map((rel: any, idx: number) => (
+                      <div key={idx} className="border rounded-lg p-4 bg-card/50">
+                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-2">{rel.relation}</span>
+                        <div className="flex flex-col gap-1">
+                          {rel.entry.map((entry: any) => (
+                            <Link key={entry.mal_id} href={entry.type === "anime" ? `/anime/${entry.mal_id}` : "#"} className={`text-sm font-medium hover:text-primary transition-colors ${entry.type !== "anime" && "pointer-events-none opacity-60"}`}>
+                              {entry.name} <span className="text-xs text-muted-foreground">({entry.type})</span>
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
 
+              {sortedCharacters.length > 0 && (
+                <section>
+                  <h3 className="text-xl font-bold mb-4 flex items-center gap-2"><Users className="h-5 w-5" /> Main Characters</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {sortedCharacters.map((char: any) => (
+                      <div key={char.character.mal_id} className="flex items-center gap-3 border rounded-lg p-2 bg-card hover:border-primary/50 transition-colors">
+                        <div className="relative h-12 w-12 rounded-full overflow-hidden shrink-0 border">
+                          <Image src={char.character.images.jpg.image_url} alt={char.character.name} fill className="object-cover" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold truncate">{char.character.name}</p>
+                          <p className="text-xs text-muted-foreground">{char.role}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </TabsContent>
+
+            {/* SONGS CONTENT */}
+            <TabsContent value="songs" className="mt-6">
+              <div className="grid md:grid-cols-2 gap-8">
+                <Card>
+                  <CardHeader><CardTitle className="text-base">Opening Themes</CardTitle></CardHeader>
+                  <CardContent>
+                    <ScrollArea className="h-[300px]">
+                      <ul className="space-y-2 text-sm text-muted-foreground">
+                        {themes.openings?.length ? themes.openings.map((op: string, i: number) => <li key={i} className="py-1 border-b last:border-0 border-border/50">{op}</li>) : <li>No opening themes found.</li>}
+                      </ul>
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader><CardTitle className="text-base">Ending Themes</CardTitle></CardHeader>
+                  <CardContent>
+                    <ScrollArea className="h-[300px]">
+                      <ul className="space-y-2 text-sm text-muted-foreground">
+                        {themes.endings?.length ? themes.endings.map((ed: string, i: number) => <li key={i} className="py-1 border-b last:border-0 border-border/50">{ed}</li>) : <li>No ending themes found.</li>}
+                      </ul>
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            {/* REVIEWS CONTENT */}
+            <TabsContent value="reviews" className="mt-6 space-y-8">
+               {reviews.length > 0 ? (
+                 <>
+                   <div className="flex items-center gap-2 mb-2">
+                      <MessageSquare className="h-5 w-5 text-primary" />
+                      <h3 className="text-xl font-bold">Top Reviews</h3>
+                   </div>
+                   
+                   <div className="grid gap-6">
+                      {reviews.slice(0, 2).map((review: any) => (
+                        <ReviewCard key={review.mal_id} review={review} />
+                      ))}
+                   </div>
+
+                   <div className="flex justify-center pt-4">
+                     <Link href={`/anime/${id}/reviews`}>
+                       <Button size="lg" className="rounded-full px-8 shadow-lg hover:scale-105 transition-transform">
+                          Read All Reviews
+                       </Button>
+                     </Link>
+                   </div>
+                 </>
+               ) : (
+                 <div className="text-center py-12 bg-muted/20 rounded-xl border border-dashed">
+                    <MessageSquare className="h-10 w-10 mx-auto text-muted-foreground mb-3 opacity-50" />
+                    <p className="text-muted-foreground">No reviews available yet.</p>
+                 </div>
+               )}
+            </TabsContent>
+
+            {/* EPISODES CONTENT */}
+            <TabsContent value="episodes" className="mt-6">
+               <Card>
+                 <CardHeader className="pb-4 border-b">
+                    <CardTitle className="flex justify-between items-center text-lg">Episode List <Badge variant="secondary" className="text-xs font-normal">{episodes.length} Episodes Loaded</Badge></CardTitle>
+                 </CardHeader>
+                 <CardContent className="p-0">
+                   <ScrollArea className="h-[500px] w-full">
+                     {episodes.length > 0 ? (
+                       <div className="divide-y">
+                         {episodes.map((ep: any) => (
+                           <div key={ep.mal_id} className="flex items-center gap-4 p-4 hover:bg-muted/30 transition-colors">
+                             <div className="flex-shrink-0 w-12 text-center"><span className="text-2xl font-bold text-muted-foreground/50">#{ep.mal_id}</span></div>
+                             <div className="flex-grow min-w-0">
+                               <div className="flex items-center gap-2 mb-1">
+                                 <h4 className="font-semibold text-sm truncate">{ep.title}</h4>
+                                 {ep.filler && <Badge variant="destructive" className="text-[10px] h-4 px-1">Filler</Badge>}
+                                 {ep.recap && <Badge variant="outline" className="text-[10px] h-4 px-1">Recap</Badge>}
+                               </div>
+                               <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                 <span className="truncate">{ep.title_japanese}</span>
+                                 {ep.aired && <span className="flex items-center gap-1 shrink-0"><Calendar className="h-3 w-3" /> {new Date(ep.aired).toLocaleDateString()}</span>}
+                               </div>
+                             </div>
+                             {ep.score && <div className="flex-shrink-0 text-right"><Badge variant="secondary" className="flex items-center gap-1"><Star className="h-3 w-3 fill-yellow-500 text-yellow-500" /> {ep.score}</Badge></div>}
+                           </div>
+                         ))}
+                       </div>
+                     ) : <div className="flex flex-col items-center justify-center py-16 text-muted-foreground"><Tv className="h-12 w-12 mb-4 opacity-20" /><p>No episode information available.</p></div>}
+                   </ScrollArea>
+                 </CardContent>
+               </Card>
+            </TabsContent>
+
+          </Tabs>
         </div>
       </div>
-    </main>
+    </div>
   );
 }
