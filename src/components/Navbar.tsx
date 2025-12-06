@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Search, Tv } from "lucide-react"; 
+import { Search, Tv } from "lucide-react";
+import { ModeToggle } from "@/components/mode-toggle";
 
 export default function Navbar() {
   return (
@@ -15,7 +16,7 @@ export default function Navbar() {
           <span className="text-xl font-bold tracking-tight">AnimeKu</span>
         </Link>
 
-        {/* Navigation */}
+        {/* Navigation & Actions */}
         <div className="flex items-center gap-2">
           <Link href="/">
             <Button variant="ghost" className="text-sm font-medium">
@@ -25,9 +26,14 @@ export default function Navbar() {
           <Link href="/search">
             <Button variant="ghost" className="text-sm font-medium gap-2">
               <Search className="h-4 w-4" />
-              Search
+              <span className="hidden sm:inline">Search</span>
             </Button>
           </Link>
+          
+          {/* Dark Mode Toggle */}
+          <div className="ml-2">
+            <ModeToggle />
+          </div>
         </div>
       </div>
     </header>
