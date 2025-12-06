@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import AnimeCard from "@/components/AnimeCard";
 import { searchAnime } from "@/lib/api";
+import { Input } from "@/components/ui/input";
+import { Search, Loader2 } from "lucide-react";
 
 export default function SearchClient() {
     const [q, setQ] = useState("");
@@ -38,33 +40,48 @@ export default function SearchClient() {
     }, [q]);
 
     return (
-        <div className="py-6">
-            <div className="mb-4">
-                <input
-                    type="search"
-                    placeholder="Search anime..."
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                    className="w-full md:w-2/3 p-3 rounded-lg border bg-white/5 placeholder:text-gray-300 focus:outline-none"
-                />
+        <div className="py-8 space-y-8">
+            <div className="relative max-w-2xl mx-auto">
+                <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                    <Input
+                        type="search"
+                        placeholder="Cari anime favoritmu..."
+                        value={q}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQ(e.target.value)}
+                        className="pl-10 h-12 text-lg rounded-full shadow-sm border-muted-foreground/20 focus-visible:ring-primary"
+                    />
+                </div>
+                {loading && (
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                        <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                    </div>
+                )}
             </div>
 
-             {loading && <p className="text-sm mb-4">Mencari...</p>}
-      {error && <p className="text-sm text-red-500 mb-4">{error}</p>}
+            {error && (
+                <div className="text-center p-4 bg-destructive/10 text-destructive rounded-lg">
+                    {error}
+                </div>
+            )}
 
-      {!loading && !q && (
-        <p className="text-sm text-gray-400">Mulai ketik untuk mencari anime.</p>
-      )}
+            {!loading && !q && (
+                <div className="text-center py-20 text-muted-foreground">
+                    <p className="text-lg">Mulai ketik untuk menemukan anime baru.</p>
+                </div>
+            )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
-        {results.map((anime: any) => (
-          <AnimeCard key={anime.mal_id} anime={anime} />
-        ))}
-      </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+                {results.map((anime: any) => (
+                    <AnimeCard key={anime.mal_id} anime={anime} />
+                ))}
+            </div>
 
-      {!loading && q && results.length === 0 && (
-        <p className="mt-6 text-gray-400">Tidak ditemukan hasil untuk “{q}”.</p>
-      )}
-    </div>
+            {!loading && q && results.length === 0 && (
+                <div className="text-center py-20 text-muted-foreground">
+                    <p>Tidak ditemukan hasil untuk <span className="font-bold text-foreground">“{q}”</span>.</p>
+                </div>
+            )}
+        </div>
   );
 }
