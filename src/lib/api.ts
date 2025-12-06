@@ -54,3 +54,15 @@ export async function getAnimeStreaming(id: string) {
   const data = await fetchJSON(`${API_BASE}/anime/${id}/streaming`);
   return data?.data || [];
 }
+
+export async function getAnimeReviews(id: string, page = 1) {
+  const res = await fetch(
+    `https://api.jikan.moe/v4/anime/${id}/reviews?page=${page}`
+  );
+  const data = await res.json();
+
+  return {
+    reviews: data.data || [],
+    pagination: data.pagination || {},
+  };
+}
